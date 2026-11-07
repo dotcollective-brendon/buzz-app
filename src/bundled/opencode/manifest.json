@@ -8,7 +8,18 @@
     "tags": ["code", "coding-agents"]
   },
   "host": {
-    "processes": [{ "id": "opencode", "program": "opencode", "args": ["acp"] }],
+    "processes": [
+      {
+        "id": "opencode",
+        "program": "opencode",
+        "args": ["acp"]
+      },
+      {
+        "id": "export",
+        "program": "opencode",
+        "args": ["session", "export"]
+      }
+    ],
     "mcp": true,
     "files": true
   }

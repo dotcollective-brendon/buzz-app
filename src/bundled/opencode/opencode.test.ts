@@ -83,7 +83,11 @@ it("registers disabled by default, running opencode acp from PATH with Buzz tool
   expect(plugin?.enabledByDefault).toBe(false);
   expect(plugin?.manifest.name).toBe("OpenCode");
   expect(plugin?.manifest.host).toMatchObject({
-    processes: [{ id: "opencode", program: "opencode", args: ["acp"] }],
+    processes: [
+      { id: "opencode", program: "opencode", args: ["acp"] },
+      // Reads a session back for Activity, given only its id.
+      { id: "export", program: "opencode", args: ["session", "export"] },
+    ],
     mcp: true,
     files: true,
   });

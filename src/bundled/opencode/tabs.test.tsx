@@ -1,12 +1,19 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Agent, Models } from "../../features/agents/service";
 import type { Modes } from "./models";
 import { type Config, DEFAULT_CONFIG } from "./runtime";
 import { createTabs } from "./tabs";
+import { openCodeTurns } from "./transcript";
 
 beforeEach(() => {
   // jsdom has no layout observers; the model picker sizes itself with one.
@@ -50,6 +57,52 @@ const MODES: Modes = {
 };
 const modes = async () => MODES;
 
+/** Two saved conversations; the thread's session is running. */
+function fakeRuntime() {
+  const labels = new Map([["chan", { name: "general" }]]);
+  // As the runtime's, the same snapshot until a session changes.
+  const live = [{ key: "chan/root", busy: true, sessionId: "ses_live" }];
+  return {
+    subscribe: () => () => {},
+    sessions: () => live,
+    conversations: () => [
+      { key: "chan/root", at: 2_000, sessions: ["ses_old"] },
+      { key: "other", at: 1_000, sessions: ["ses_other"] },
+    ],
+    channelLabel: (_agent: string, channelId: string) => labels.get(channelId),
+    transcript: vi.fn(
+      async (
+        _agent: string,
+        row: { channelId: string; root?: string; sessions: readonly string[] },
+      ) => ({
+        more: false,
+        turns: openCodeTurns(
+          {
+            info: { id: row.sessions[0] ?? "" },
+            messages: [
+              {
+                type: "user",
+                id: "u",
+                time: { created: 1 },
+                text: `Hello from ${row.sessions[0]}`,
+              },
+              {
+                type: "assistant",
+                id: "a",
+                time: { created: 2 },
+                content: [{ type: "text", text: "Hi there" }],
+              },
+            ],
+          },
+          row,
+          false,
+        ),
+      }),
+    ),
+  };
+}
+const runtime = fakeRuntime();
+
 const AGENT = {
   key: "c".repeat(64),
   pubkey: "c".repeat(64),
@@ -66,7 +119,11 @@ async function choose(label: string, option: string) {
 }
 
 it("shows OpenCode's agent, model, thinking level and instructions in Identity, and its folder in Settings", async () => {
-  const { SettingsTab } = createTabs({ models: async () => MODELS, modes });
+  const { SettingsTab } = createTabs({
+    models: async () => MODELS,
+    modes,
+    runtime,
+  });
   const save = vi.fn(async () => {});
   const { rerender } = render(
     <SettingsTab agent={AGENT} save={save} settingsSection="identity" />,
@@ -102,7 +159,7 @@ it("says when OpenCode's models could not be listed, and lists them again", asyn
     .fn<() => Promise<Models>>()
     .mockRejectedValueOnce(new Error("opencode is not installed"))
     .mockResolvedValue(MODELS);
-  const { SettingsTab } = createTabs({ models, modes });
+  const { SettingsTab } = createTabs({ models, modes, runtime });
   render(
     <SettingsTab agent={AGENT} save={vi.fn()} settingsSection="identity" />,
   );
@@ -121,7 +178,11 @@ it("says when OpenCode's models could not be listed, and lists them again", asyn
 });
 
 it("refuses to save a relative workspace", async () => {
-  const { SettingsTab } = createTabs({ models: async () => MODELS, modes });
+  const { SettingsTab } = createTabs({
+    models: async () => MODELS,
+    modes,
+    runtime,
+  });
   const save = vi.fn(async () => {});
   render(<SettingsTab agent={AGENT} save={save} settingsSection="runtime" />);
   const user = userEvent.setup();
@@ -136,7 +197,7 @@ it("refuses to save a relative workspace", async () => {
 });
 
 it("starts a new agent on the chosen OpenCode agent and workspace", async () => {
-  const { Create } = createTabs({ models: async () => MODELS, modes });
+  const { Create } = createTabs({ models: async () => MODELS, modes, runtime });
   const onChange = vi.fn();
   const { rerender } = render(
     <Create config={DEFAULT_CONFIG} onChange={onChange} disabled={false} />,
@@ -156,4 +217,59 @@ it("starts a new agent on the chosen OpenCode agent and workspace", async () => 
   expect(
     screen.getByText("Enter an absolute or ~/… workspace path."),
   ).toBeVisible();
+});
+
+it("lists the agent's conversations in Activity, and shows a session's transcript", async () => {
+  const runtime = fakeRuntime();
+  const { ActivityTab } = createTabs({
+    models: async () => MODELS,
+    modes,
+    runtime,
+  });
+  render(
+    <ActivityTab
+      agent={AGENT}
+      conversation={{ channelId: "chan", rootId: "root" }}
+    />,
+  );
+  const user = userEvent.setup();
+  const here = await screen.findByRole("region", { name: "This thread" });
+  expect(here).toHaveTextContent("general");
+  expect(here).toHaveTextContent("Working");
+  expect(screen.getAllByRole("listitem").map((row) => row.textContent)).toEqual(
+    [expect.stringMatching(/^otherChannel · /)],
+  );
+
+  await user.click(
+    within(here).getByRole("button", { name: /^View transcript/ }),
+  );
+  // The running session comes first, before the saved one.
+  expect(
+    await screen.findByText("Hello from ses_live", {
+      selector: "summary span",
+    }),
+  ).toBeVisible();
+  expect(runtime.transcript).toHaveBeenLastCalledWith(
+    AGENT.key,
+    expect.objectContaining({ sessions: ["ses_live", "ses_old"] }),
+    true,
+    expect.any(AbortSignal),
+  );
+  await user.click(screen.getByRole("button", { name: "Back to profile" }));
+  await user.click(
+    within(screen.getByRole("listitem")).getByRole("button", {
+      name: "View transcript: other · channel",
+    }),
+  );
+  expect(
+    await screen.findByText("Hello from ses_other", {
+      selector: "summary span",
+    }),
+  ).toBeVisible();
+
+  runtime.transcript.mockRejectedValueOnce(new Error("opencode stopped"));
+  await user.click(screen.getByRole("button", { name: "Refresh transcript" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Could not read the OpenCode session: opencode stopped",
+  );
 });

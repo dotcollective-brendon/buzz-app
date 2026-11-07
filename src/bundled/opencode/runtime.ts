@@ -66,6 +66,7 @@ import { AgentSessions as AcpAgentSessions } from "../../features/agent-harness/
 import type { AcpProcess } from "../../features/agent-harness/acp/process";
 import { validWorkspace } from "../codex/config";
 import { localSessions } from "../goose/sessions";
+import { type Conversation, readTranscript } from "./transcript";
 
 class AgentSessions extends AcpAgentSessions {
   constructor(
@@ -283,7 +284,35 @@ export class OpenCodeRuntime {
   conversations(agent: AgentKey) {
     return localSessions(this.storage, agent, "buzz.opencode.sessions.v1")
       .list()
-      .map(([key, { at }]) => ({ key, at }));
+      .map(([key, { at, sessions = [] }]) => ({ key, at, sessions }));
+  }
+  /** The community's current name and kind for a channel, if it lists it. */
+  channelLabel(agent: AgentKey, channelId: string) {
+    return ownerReads(this.relay(agent), pubkeyOf(agent))?.channelLabel(
+      channelId,
+    );
+  }
+  /** A conversation's latest turns, read from opencode's own storage, each
+   * session's saved prompt at its top. */
+  async transcript(
+    agent: AgentKey,
+    conversation: Conversation & { sessions: readonly string[] },
+    working: boolean,
+    signal: AbortSignal,
+  ) {
+    const reads = ownerReads(this.relay(agent), pubkeyOf(agent));
+    const transcript = await readTranscript(
+      this.desktop.spawn,
+      conversation.sessions,
+      conversation,
+      working,
+      signal,
+      reads && ((pubkey) => reads.name(pubkey)),
+    );
+    return {
+      ...transcript,
+      turns: this.prompts(agent).shown(transcript.turns),
+    };
   }
   subscribe(listener: () => void) {
     this.listeners.add(listener);

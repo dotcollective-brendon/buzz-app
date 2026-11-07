@@ -60,9 +60,10 @@ export const apply: PluginModule["apply"] = (ctx) => {
   }
 
   const listModels = async () => models?.read() ?? { current: "", models: [] };
-  const { Create, SettingsTab } = createTabs({
+  const { ActivityTab, Create, SettingsTab } = createTabs({
     models: listModels,
     modes: async () => models?.modes() ?? { current: "", modes: [] },
+    runtime,
   });
 
   agents.register<Config>({
@@ -94,6 +95,12 @@ export const apply: PluginModule["apply"] = (ctx) => {
         role: "settings",
         splitSettings: true,
         component: SettingsTab,
+      },
+      {
+        id: "activity",
+        title: "Activity",
+        role: "activity",
+        component: ActivityTab,
       },
     ],
     models: listModels,

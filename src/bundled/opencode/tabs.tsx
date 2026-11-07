@@ -1,11 +1,30 @@
-// OpenCode's New agent choices and agent settings: which opencode agent it
-// runs as, its model and thinking level, instructions, folder and conversation
-// scope. Agents, models and levels are listed from `opencode acp`.
-import { useEffect, useId, useRef, useState } from "react";
+// OpenCode's New agent choices, agent settings and activity: which opencode
+// agent it runs as, its model and thinking level, instructions, folder and
+// conversation scope, and its conversations' transcripts. Agents, models and
+// levels are listed from `opencode acp`; transcripts are opencode's own.
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { errorText } from "../../buzz-mcp/rpc";
+import activityStyles from "../../features/agents/ActivityLayout.module.css";
 import { AgentInstructions } from "../../features/agents/AgentInstructions";
 import { AgentSaveButton } from "../../features/agents/AgentSaveButton";
 import { ModelPicker } from "../../features/agents/ModelPicker";
+import {
+  ConversationName,
+  OpenedConversation,
+  useOpenedSession,
+  useOpenTranscript,
+} from "../../features/agents/OpenedConversation";
+import {
+  TranscriptPanel,
+  whenShown,
+} from "../../features/agents/TranscriptPanel";
 import type {
   AgentCreateProps,
   AgentViewProps,
@@ -15,10 +34,22 @@ import { Button } from "../../shared/design-system/ui/Button";
 import { Field } from "../../shared/design-system/ui/Field";
 import { Input } from "../../shared/design-system/ui/Input";
 import { Select } from "../../shared/design-system/ui/Select";
+import { PanelSubview } from "../../features/panels/PanelSubview";
+import { isRetryableRead, retryRead } from "../../features/relay/read-retry";
+import { useClockFormat } from "../../shared/clock-preference";
+import { formatItemTimestamp } from "../../shared/datetime";
+import { InlineHeader } from "../../shared/design-system/ui/Header";
 import { SettingsGroup } from "../../shared/design-system/ui/SettingsGroup";
+import type { ChannelLabel } from "../../features/channels/channel-icon";
 import { validWorkspace } from "../codex/config";
 import type { Modes } from "./models";
-import { type Config, DEFAULT_CONFIG, config as readConfig } from "./runtime";
+import {
+  type Config,
+  DEFAULT_CONFIG,
+  type OpenCodeRuntime,
+  config as readConfig,
+} from "./runtime";
+import { TURN_LIMIT } from "./transcript";
 
 const SCOPES = [
   {
@@ -29,6 +60,20 @@ const SCOPES = [
     ],
   },
 ];
+const CONVERSATION_LIMIT = 30;
+/** A conversation the agent has opencode sessions in. */
+type Row = Readonly<
+  Partial<ChannelLabel> & {
+    key: string;
+    channelId: string;
+    root?: string;
+    at: number;
+    /** Its opencode sessions, newest first. */
+    sessions: readonly string[];
+  }
+>;
+const label = ({ channelId, name, root }: Row) =>
+  `${name || channelId.slice(0, 8)} · ${root ? `thread ${root.slice(0, 8)}` : "channel"}`;
 const WORKSPACE_DESCRIPTION =
   "The folder OpenCode works in. Use ~/ for your home folder.";
 const WORKSPACE_ERROR = "Enter an absolute or ~/… workspace path.";
@@ -67,9 +112,14 @@ const levelsOf = (model: string, models: Models | undefined) =>
 export function createTabs({
   models,
   modes,
+  runtime,
 }: Readonly<{
   models: () => Promise<Models>;
   modes: () => Promise<Modes>;
+  runtime: Pick<
+    OpenCodeRuntime,
+    "subscribe" | "sessions" | "conversations" | "channelLabel" | "transcript"
+  >;
 }>) {
   /** The opencode agent turns run as: opencode's default, or one it lists. */
   function ModeField({
@@ -318,5 +368,194 @@ export function createTabs({
     );
   }
 
-  return { Create, SettingsTab };
+  /** One conversation's turns, kept current while opencode works. */
+  function TranscriptView({
+    agent,
+    row,
+    working,
+  }: {
+    agent: AgentViewProps<Config>["agent"];
+    row: Row;
+    working: boolean;
+  }) {
+    return (
+      <TranscriptPanel
+        agent={agent}
+        read={(signal) => {
+          let tries = 0;
+          return retryRead(
+            // A retry waits for a hidden window to show.
+            async (signal) => {
+              if (tries++) await whenShown(signal);
+              return runtime.transcript(agent.key, row, working, signal);
+            },
+            signal,
+            isRetryableRead,
+          );
+        }}
+        readKey={`${agent.key}\u0000${row.key}\u0000${row.sessions.join()}`}
+        working={working}
+        reading="Reading the OpenCode session…"
+        failed="Could not read the OpenCode session"
+        missing={null}
+        notes={(transcript) =>
+          transcript.more && (
+            <p className="m-0 text-body-sm text-subtle">
+              Showing the latest {TURN_LIMIT} turns.
+            </p>
+          )
+        }
+      />
+    );
+  }
+
+  /** The conversation the profile was opened from, and the agent's other
+   * recent ones, each with its transcript from opencode's storage. */
+  function ActivityTab({
+    agent,
+    conversation,
+    initialTranscript,
+    close,
+  }: {
+    agent: AgentViewProps<Config>["agent"];
+    conversation?: AgentViewProps<Config>["conversation"];
+    initialTranscript?: AgentViewProps<Config>["initialTranscript"];
+    close?: AgentViewProps<Config>["close"];
+  }) {
+    useClockFormat();
+    const live = useSyncExternalStore(
+      (listener) => runtime.subscribe(listener),
+      () => runtime.sessions(agent.key),
+    );
+    // Read again only when a session changes, which can save one.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: a session change can save one.
+    const saved = useMemo(
+      () => runtime.conversations(agent.key),
+      [agent.key, live],
+    );
+    // Saved conversations, with a running session's id first: a first turn's
+    // session is saved only once it ends.
+    const rows: Row[] = saved.map(({ key, at, sessions }) => {
+      const [channelId = key, root] = key.split("/");
+      const running = live.find((session) => session.key === key)?.sessionId;
+      return {
+        key,
+        channelId,
+        ...(root ? { root } : {}),
+        at,
+        sessions: running
+          ? [running, ...sessions.filter((id) => id !== running)]
+          : sessions,
+        ...runtime.channelLabel(agent.key, channelId),
+      };
+    });
+    for (const session of live)
+      if (session.sessionId && !rows.some((row) => row.key === session.key)) {
+        const [channelId = session.key, root] = session.key.split("/");
+        rows.unshift({
+          key: session.key,
+          channelId,
+          ...(root ? { root } : {}),
+          at: Date.now(),
+          sessions: [session.sessionId],
+          ...runtime.channelLabel(agent.key, channelId),
+        });
+      }
+    const busy = (row: Row) =>
+      live.some((session) => session.key === row.key && session.busy);
+    const status = (row: Row) => (busy(row) ? "Working" : undefined);
+    const { session: here } = useOpenedSession(
+      rows,
+      conversation,
+      async () => undefined,
+    );
+    const { open, show, back } = useOpenTranscript(
+      conversation,
+      label,
+      initialTranscript && { initial: here, ...initialTranscript },
+      close,
+    );
+    const recent = rows
+      .filter((row) => row.key !== here?.key)
+      .slice(0, CONVERSATION_LIMIT);
+    // The open transcript follows its conversation's current sessions.
+    const shown = open && (rows.find((row) => row.key === open.key) ?? open);
+    return (
+      <div className={activityStyles.activity}>
+        {conversation && (
+          <OpenedConversation
+            conversation={conversation}
+            harness="OpenCode"
+            session={here}
+            status={here && status(here)}
+            onView={() => here && show(here)}
+          />
+        )}
+        <section className={activityStyles.section}>
+          <InlineHeader title="Recent conversations" />
+          {recent.length ? (
+            <SettingsGroup layout="form">
+              <ul className={activityStyles.list}>
+                {recent.map((row) => (
+                  <li key={row.key} className={activityStyles.entry}>
+                    <div className={activityStyles.row}>
+                      <span className={activityStyles.copy}>
+                        <ConversationName
+                          session={row}
+                          title={label(row)}
+                          className="text-label-sm"
+                        />
+                        <span className="block text-body-sm text-subtle">
+                          {[
+                            row.root
+                              ? `Thread ${row.root.slice(0, 8)}`
+                              : "Channel",
+                            status(row),
+                            formatItemTimestamp(row.at / 1000, {
+                              withTime: true,
+                            }),
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="subtle"
+                        size="sm"
+                        aria-label={`View transcript: ${label(row)}`}
+                        onClick={() => show(row)}
+                      >
+                        View transcript
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </SettingsGroup>
+          ) : (
+            <p className="m-0 text-body-sm text-subtle">
+              None. A conversation starts when the agent is mentioned.
+            </p>
+          )}
+        </section>
+        {shown && (
+          <PanelSubview
+            title={label(shown)}
+            backLabel="Back to profile"
+            onBack={back}
+          >
+            <TranscriptView
+              key={shown.key}
+              agent={agent}
+              row={shown}
+              working={busy(shown)}
+            />
+          </PanelSubview>
+        )}
+      </div>
+    );
+  }
+
+  return { ActivityTab, Create, SettingsTab };
 }
