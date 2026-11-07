@@ -18,6 +18,7 @@ import {
   syncedSettingsSchema,
   withSyncedSettings,
 } from "./settings";
+import { createTabs } from "./tabs";
 
 export const TYPE_ID = "opencode";
 const HANDOVER_MS = 2 * 60_000;
@@ -57,6 +58,9 @@ export const apply: PluginModule["apply"] = (ctx) => {
     });
   }
 
+  const listModels = async () => models?.read() ?? { current: "", models: [] };
+  const { SettingsTab } = createTabs({ models: listModels });
+
   agents.register<Config>({
     id: TYPE_ID,
     title: "OpenCode",
@@ -74,7 +78,16 @@ export const apply: PluginModule["apply"] = (ctx) => {
         }),
       subscribe: (listener) => runtime.subscribe(listener),
     },
-    models: async () => models?.read() ?? { current: "", models: [] },
+    tabs: [
+      {
+        id: "settings",
+        title: "Settings",
+        role: "settings",
+        splitSettings: true,
+        component: SettingsTab,
+      },
+    ],
+    models: listModels,
     sessionControls: {
       scope: (agent) => config(agent.config).scope,
       state: (agent, place) => runtime.sessionState(agent, place),
