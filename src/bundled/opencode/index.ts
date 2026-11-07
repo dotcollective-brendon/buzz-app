@@ -5,6 +5,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { repositoriesContext } from "../../features/communities/repositories";
 import type { PluginModule } from "../../plugins/api";
+import { OpenCodeLogoIcon } from "../../shared/design-system/icons";
 import { OpenCodeModels } from "./models";
 import {
   type Config,
@@ -67,6 +68,7 @@ export const apply: PluginModule["apply"] = (ctx) => {
   agents.register<Config>({
     id: TYPE_ID,
     title: "OpenCode",
+    icon: OpenCodeLogoIcon,
     description:
       "OpenCode on this computer, with any provider it supports. Each thread it is mentioned in is one continuing session.",
     defaults: () => ({ config: DEFAULT_CONFIG }),

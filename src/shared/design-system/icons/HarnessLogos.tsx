@@ -49,6 +49,33 @@ export const PiLogoArtwork = forwardRef<SVGSVGElement, IconProps>(
   },
 );
 
+/** OpenCode's official mark. MIT © 2025 opencode; see NOTICE.md. */
+export const OpenCodeLogoArtwork = forwardRef<SVGSVGElement, IconProps>(
+  function OpenCodeLogoArtwork({ size = "1em", ...props }, ref) {
+    return (
+      // biome-ignore lint/a11y/noSvgWithoutTitle: the public gateway supplies accessibility semantics.
+      <svg
+        ref={ref}
+        width={size}
+        height={size}
+        viewBox="0 0 512 512"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        {...props}
+      >
+        <rect width="512" height="512" fill="#131010" />
+        <path d="M320 224V352H192V224H320Z" fill="#5A5858" />
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d="M384 416H128V96H384V416ZM320 160H192V352H320V160Z"
+          fill="white"
+        />
+      </svg>
+    );
+  },
+);
+
 /** Claude's bundled brand mark, reused unchanged from old Buzz; see NOTICE.md. */
 export const ClaudeLogoArtwork = forwardRef<SVGSVGElement, IconProps>(
   function ClaudeLogoArtwork({ size = "1em", ...props }, ref) {

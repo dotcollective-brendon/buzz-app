@@ -34,7 +34,8 @@ OneDrive is a trademark of Microsoft.
 ## Harness brand marks
 
 The Goose and Pi marks in `src/shared/design-system/icons/HarnessLogos.tsx`
-are reused from old Buzz to identify their respective harnesses.
+are reused from old Buzz to identify their respective harnesses. The OpenCode
+mark there is taken from OpenCode's own repository.
 
 Goose: [block/goose](https://github.com/block/goose), revision
 `305849b71709b95b86ed9f11bd3bc939899c0aab`,
@@ -51,6 +52,35 @@ decorative accessibility gateway. Its license follows:
 MIT License
 
 Copyright (c) 2026 Earendil Inc. and contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+OpenCode: [anomalyco/opencode](https://github.com/anomalyco/opencode), revision
+`6a89e9f287ade1e1ceefc0e4d13df97ff7631567`, `packages/identity/mark.svg`, to
+identify the OpenCode harness. The artwork is unchanged; this app drops the
+file's outer `<svg>` wrapper and its no-op color-scheme style, and adds the
+shared icon sizing, ref and decorative accessibility gateway. Its license
+follows:
+
+MIT License
+
+Copyright (c) 2025 opencode
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

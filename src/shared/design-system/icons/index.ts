@@ -17,6 +17,7 @@ import {
   GrokLogoArtwork,
   ZaiLogoArtwork,
   KimiLogoArtwork,
+  OpenCodeLogoArtwork,
 } from "./HarnessLogos";
 
 // Brand artwork requested for Harness Settings; general UI glyphs remain Tabler.
@@ -44,6 +45,13 @@ export const PiLogoIcon = defineIcon("custom", PiLogoArtwork, {
   category: "Custom brand mark",
   provenance:
     "Official Earendil Pi favicon (MIT), reused from old Buzz by explicit design request; see NOTICE.md",
+  intendedSizes: [{ width: 32, height: 32 }],
+});
+export const OpenCodeLogoIcon = defineIcon("custom", OpenCodeLogoArtwork, {
+  meaning: "OpenCode harness",
+  category: "Custom brand mark",
+  provenance:
+    "Official OpenCode mark (MIT), from anomalyco/opencode; see NOTICE.md",
   intendedSizes: [{ width: 32, height: 32 }],
 });
 
