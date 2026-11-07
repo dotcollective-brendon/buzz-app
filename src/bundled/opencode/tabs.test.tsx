@@ -4,6 +4,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Agent, Models } from "../../features/agents/service";
+import type { Modes } from "./models";
 import { type Config, DEFAULT_CONFIG } from "./runtime";
 import { createTabs } from "./tabs";
 
@@ -40,6 +41,15 @@ const MODELS: Models = {
   ],
 };
 
+const MODES: Modes = {
+  current: "build",
+  modes: [
+    { id: "build", label: "Build" },
+    { id: "plan", label: "Plan" },
+  ],
+};
+const modes = async () => MODES;
+
 const AGENT = {
   key: "c".repeat(64),
   pubkey: "c".repeat(64),
@@ -55,8 +65,8 @@ async function choose(label: string, option: string) {
   await user.click(await screen.findByRole("option", { name: option }));
 }
 
-it("shows OpenCode's model, thinking level and instructions in Identity, and its folder in Settings", async () => {
-  const { SettingsTab } = createTabs({ models: async () => MODELS });
+it("shows OpenCode's agent, model, thinking level and instructions in Identity, and its folder in Settings", async () => {
+  const { SettingsTab } = createTabs({ models: async () => MODELS, modes });
   const save = vi.fn(async () => {});
   const { rerender } = render(
     <SettingsTab agent={AGENT} save={save} settingsSection="identity" />,
@@ -66,6 +76,9 @@ it("shows OpenCode's model, thinking level and instructions in Identity, and its
   expect(screen.getByLabelText("Instructions")).toHaveValue("Track UAT.");
   expect(screen.queryByRole("textbox", { name: "Workspace" })).toBeNull();
 
+  const agent = screen.getByRole("combobox", { name: "OpenCode agent" });
+  await waitFor(() => expect(agent).toHaveTextContent("Build"));
+  await choose("OpenCode agent", "Plan");
   await choose("Thinking", "High");
   // OpenCode lists no levels for another model, so the pick goes back to its.
   await choose("Model", "Sonnet");
@@ -78,6 +91,7 @@ it("shows OpenCode's model, thinking level and instructions in Identity, and its
   await userEvent.setup().click(screen.getByRole("button", { name: "Save" }));
   expect(save).toHaveBeenCalledWith({
     ...AGENT.config,
+    mode: "plan",
     model: "omlx/qwen",
     effort: "high",
   });
@@ -88,7 +102,7 @@ it("says when OpenCode's models could not be listed, and lists them again", asyn
     .fn<() => Promise<Models>>()
     .mockRejectedValueOnce(new Error("opencode is not installed"))
     .mockResolvedValue(MODELS);
-  const { SettingsTab } = createTabs({ models });
+  const { SettingsTab } = createTabs({ models, modes });
   render(
     <SettingsTab agent={AGENT} save={vi.fn()} settingsSection="identity" />,
   );
@@ -104,4 +118,42 @@ it("says when OpenCode's models could not be listed, and lists them again", asyn
     ).toHaveTextContent("Low · Default"),
   );
   expect(models).toHaveBeenCalledTimes(2);
+});
+
+it("refuses to save a relative workspace", async () => {
+  const { SettingsTab } = createTabs({ models: async () => MODELS, modes });
+  const save = vi.fn(async () => {});
+  render(<SettingsTab agent={AGENT} save={save} settingsSection="runtime" />);
+  const user = userEvent.setup();
+  const workspace = screen.getByRole("textbox", { name: "Workspace" });
+  await user.clear(workspace);
+  await user.type(workspace, "repo");
+  await user.click(screen.getByRole("button", { name: "Save" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Enter an absolute or ~/… workspace path.",
+  );
+  expect(save).not.toHaveBeenCalled();
+});
+
+it("starts a new agent on the chosen OpenCode agent and workspace", async () => {
+  const { Create } = createTabs({ models: async () => MODELS, modes });
+  const onChange = vi.fn();
+  const { rerender } = render(
+    <Create config={DEFAULT_CONFIG} onChange={onChange} disabled={false} />,
+  );
+  await choose("OpenCode agent", "Plan");
+  expect(onChange).toHaveBeenLastCalledWith({
+    ...DEFAULT_CONFIG,
+    mode: "plan",
+  });
+  rerender(
+    <Create
+      config={{ ...DEFAULT_CONFIG, workspace: "repo" }}
+      onChange={onChange}
+      disabled={false}
+    />,
+  );
+  expect(
+    screen.getByText("Enter an absolute or ~/… workspace path."),
+  ).toBeVisible();
 });

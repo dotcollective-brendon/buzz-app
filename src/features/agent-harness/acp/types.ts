@@ -69,6 +69,9 @@ export type Choice = Readonly<{
   provider: string;
   model: string;
   effort?: string;
+  /** The harness's own agent or mode, for a harness that offers them; empty
+   * is its default. */
+  mode?: string;
 }>;
 
 /** The HTTP MCP server a session declares in `session/new`. */

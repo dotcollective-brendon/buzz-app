@@ -59,7 +59,10 @@ export const apply: PluginModule["apply"] = (ctx) => {
   }
 
   const listModels = async () => models?.read() ?? { current: "", models: [] };
-  const { SettingsTab } = createTabs({ models: listModels });
+  const { Create, SettingsTab } = createTabs({
+    models: listModels,
+    modes: async () => models?.modes() ?? { current: "", modes: [] },
+  });
 
   agents.register<Config>({
     id: TYPE_ID,
@@ -69,7 +72,11 @@ export const apply: PluginModule["apply"] = (ctx) => {
     defaults: () => ({ config: DEFAULT_CONFIG }),
     adopt,
     carry,
-    summary: (agent) => config(agent.config).model || "OpenCode",
+    summary: (agent) => {
+      const { mode, model } = config(agent.config);
+      return [mode, model].filter(Boolean).join(" · ") || "OpenCode";
+    },
+    Create,
     sessions: {
       list: (key) =>
         runtime.conversations(key).map(({ key, at }) => {

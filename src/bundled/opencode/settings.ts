@@ -10,6 +10,7 @@ import type { Carry } from "../../features/agents/native";
 import { type Config, config, DEFAULT_CONFIG } from "./runtime";
 
 export const syncedSettingsSchema = {
+  mode: "string",
   model: "string",
   effort: "string",
   scope: ["thread", "channel"],

@@ -43,7 +43,8 @@ it("syncs every agent setting except instructions and the device-local folder", 
     effort: "high",
     scope: "thread",
   });
-  expect(opencode(base)).toEqual({
+  expect(opencode({ ...base, mode: "plan" })).toEqual({
+    mode: "plan",
     model: "m",
     effort: "high",
     scope: "thread",
@@ -59,7 +60,7 @@ it("syncs every agent setting except instructions and the device-local folder", 
   for (const [schema, settings] of [
     [claudeSchema, claude(base)],
     [codexSchema, codex(base)],
-    [opencodeSchema, opencode(base)],
+    [opencodeSchema, opencode({ ...base, mode: "" })],
     [gooseSchema, goose(gooseDefaults)],
   ] as const)
     expect(settingsProblem(schema, settings)).toBeUndefined();
